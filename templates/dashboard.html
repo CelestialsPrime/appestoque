@@ -1,0 +1,748 @@
+<!-- templates/dashboard.html -->
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Sistema de Controle de Estoque{% endblock %}
+
+{% block content %}
+<div class="tab-content">
+    <!-- Inventory Tab -->
+    <div class="tab-pane fade show active" id="inventory-tab">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Lista de Produtos</h5>
+                <div class="d-flex align-items-center">
+                    <div class="input-group me-2" style="width: 300px;">
+                        <span class="input-group-text bg-white">
+                            <i class="fas fa-search"></i>
+                        </span>
+                        <input type="text" class="form-control" id="search-input" placeholder="Busca Rápida">
+                    </div>
+                    <div class="input-group" style="width: 200px;">
+                        <select class="form-select" id="filter-type">
+                            <option value="Todos">Todos os Tipos</option>
+                            {% for type in unique_types %}
+                                <option value="{{ type }}">{{ type }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover" id="inventory-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">ID</th>
+                                <th scope="col">Tipo de Produto</th>
+                                <th scope="col">Nome</th>
+                                <th scope="col">Tamanho</th>
+                                <th scope="col">CA</th>
+                                <th scope="col">Validade</th>
+                                <th scope="col">Marca</th>
+                                <th scope="col">Quantidade</th>
+                                <th scope="col">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for product in inventory %}
+                                <tr {% if product[8] == "expired" %}class="expired"{% endif %}>
+                                    <td>{{ product[0] }}</td>
+                                    <td>{{ product[1] }}</td>
+                                    <td>{{ product[2] }}</td>
+                                    <td>{{ product[3] }}</td>
+                                    <td>{{ product[4] }}</td>
+                                    <td>{{ product[5] }}</td>
+                                    <td>{{ product[6] }}</td>
+                                    <td>{{ product[7] }}</td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-primary btn-edit" data-product-id="{{ product[0] }}">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            <button class="btn btn-success btn-add-quantity" data-product-id="{{ product[0] }}" data-product-name="{{ product[2] }}">
+                                                <i class="fas fa-plus"></i>
+                                            </button>
+                                            <button class="btn btn-warning btn-register-output" data-product-id="{{ product[0] }}" data-product-name="{{ product[2] }}">
+                                                <i class="fas fa-minus"></i>
+                                            </button>
+                                            <button class="btn btn-danger btn-delete" data-product-id="{{ product[0] }}" data-product-name="{{ product[2] }}">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Add Product Tab -->
+    <div class="tab-pane fade" id="add-product-tab">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Adicionar Novo Produto</h5>
+            </div>
+            <div class="card-body">
+                <form id="add-product-form">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="product-type" class="form-label">Tipo de Produto</label>
+                            <input type="text" class="form-control" id="product-type" name="type" list="product-types" required>
+                            <datalist id="product-types">
+                                {% for type in unique_types %}
+                                    <option value="{{ type }}">
+                                {% endfor %}
+                            </datalist>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="product-name" class="form-label">Nome</label>
+                            <input type="text" class="form-control" id="product-name" name="name" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="product-size" class="form-label">Tamanho</label>
+                            <input type="text" class="form-control" id="product-size" name="size" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="product-ca" class="form-label">CA</label>
+                            <input type="number" class="form-control" id="product-ca" name="ca" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="product-expiration" class="form-label">Validade (DD/MM/AAAA)</label>
+                            <input type="text" class="form-control" id="product-expiration" name="expiration" required placeholder="DD/MM/AAAA">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="product-brand" class="form-label">Marca</label>
+                            <input type="text" class="form-control" id="product-brand" name="brand" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="product-quantity" class="form-label">Quantidade</label>
+                            <input type="number" class="form-control" id="product-quantity" name="quantity" required min="1">
+                        </div>
+                    </div>
+                    <div class="text-end mt-3">
+                        <button type="button" class="btn btn-secondary me-2" id="clear-form">
+                            <i class="fas fa-eraser me-2"></i>Limpar
+                        </button>
+                        <button type="submit" class="btn btn-success">
+                            <i class="fas fa-plus-circle me-2"></i>Adicionar Produto
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- History Tab -->
+    <div class="tab-pane fade" id="history-tab">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Histórico de Saídas</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover" id="history-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Data</th>
+                                <th scope="col">Produto</th>
+                                <th scope="col">Quantidade</th>
+                                <th scope="col">Retirante</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-table-body">
+                            <!-- Will be filled by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Product Modal -->
+<div class="modal fade" id="edit-product-modal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Editar Produto</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="edit-product-form">
+                    <input type="hidden" id="edit-product-id">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="edit-product-type" class="form-label">Tipo de Produto</label>
+                            <input type="text" class="form-control" id="edit-product-type" name="type" list="product-types" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="edit-product-name" class="form-label">Nome</label>
+                            <input type="text" class="form-control" id="edit-product-name" name="name" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="edit-product-size" class="form-label">Tamanho</label>
+                            <input type="text" class="form-control" id="edit-product-size" name="size" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="edit-product-ca" class="form-label">CA</label>
+                            <input type="number" class="form-control" id="edit-product-ca" name="ca" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="edit-product-expiration" class="form-label">Validade (DD/MM/AAAA)</label>
+                            <input type="text" class="form-control" id="edit-product-expiration" name="expiration" required placeholder="DD/MM/AAAA">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="edit-product-brand" class="form-label">Marca</label>
+                            <input type="text" class="form-control" id="edit-product-brand" name="brand" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="edit-product-quantity" class="form-label">Quantidade</label>
+                            <input type="number" class="form-control" id="edit-product-quantity" name="quantity" required min="0">
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="save-edit">Salvar Alterações</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Quantity Modal -->
+<div class="modal fade" id="add-quantity-modal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Adicionar Quantidade</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="add-quantity-form">
+                    <input type="hidden" id="add-quantity-product-id">
+                    <div class="mb-3">
+                        <label for="add-quantity-product-name" class="form-label">Produto</label>
+                        <input type="text" class="form-control" id="add-quantity-product-name" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label for="add-quantity-value" class="form-label">Quantidade a Adicionar</label>
+                        <input type="number" class="form-control" id="add-quantity-value" min="1" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" id="save-add-quantity">Adicionar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Register Output Modal -->
+<div class="modal fade" id="register-output-modal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Registrar Saída</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="register-output-form">
+                    <input type="hidden" id="output-product-id">
+                    <div class="mb-3">
+                        <label for="output-product-name" class="form-label">Produto</label>
+                        <input type="text" class="form-control" id="output-product-name" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label for="output-recipient" class="form-label">Retirante</label>
+                        <select class="form-select" id="output-recipient" required>
+                            <!-- Will be filled dynamically -->
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="output-quantity" class="form-label">Quantidade</label>
+                        <input type="number" class="form-control" id="output-quantity" min="1" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-warning" id="save-output">Registrar Saída</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="delete-modal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">Confirmar Exclusão</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Tem certeza que deseja excluir o produto <strong id="delete-product-name"></strong>?</p>
+                <p class="text-danger">Esta ação não poderá ser desfeita.</p>
+            </div>
+            <div class="modal-footer">
+                <input type="hidden" id="delete-product-id">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" id="confirm-delete">Excluir</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let inventory = {{ inventory|tojson }};
+    let uniqueTypes = {{ unique_types|tojson }};
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        // Load initial data
+        loadInventory();
+        loadOutputHistory();
+        loadRecipients();
+        
+        // Setup event listeners
+        setupEventListeners();
+    });
+    
+    function loadInventory(filterType = 'Todos') {
+        fetch(`/api/inventory?type=${filterType}`)
+            .then(response => response.json())
+            .then(data => {
+                inventory = data;
+                updateInventoryTable(inventory);
+            })
+            .catch(error => {
+                console.error('Error loading inventory:', error);
+                showAlert('Erro ao carregar estoque.', 'danger');
+            });
+    }
+    
+    function updateInventoryTable(data) {
+        const tableBody = document.querySelector('#inventory-table tbody');
+        tableBody.innerHTML = '';
+        
+        data.forEach(product => {
+            const row = document.createElement('tr');
+            if (product[8] === 'expired') {
+                row.classList.add('expired');
+            }
+            
+            // Add product data cells
+            for (let i = 0; i < 8; i++) {
+                const cell = document.createElement('td');
+                cell.textContent = product[i];
+                row.appendChild(cell);
+            }
+            
+            // Add action buttons
+            const actionsCell = document.createElement('td');
+            actionsCell.innerHTML = `
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-primary btn-edit" data-product-id="${product[0]}">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-success btn-add-quantity" data-product-id="${product[0]}" data-product-name="${product[2]}">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                    <button class="btn btn-warning btn-register-output" data-product-id="${product[0]}" data-product-name="${product[2]}">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                    <button class="btn btn-danger btn-delete" data-product-id="${product[0]}" data-product-name="${product[2]}">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            `;
+            row.appendChild(actionsCell);
+            
+            tableBody.appendChild(row);
+        });
+        
+        document.getElementById('status').textContent = `Exibindo ${data.length} produtos.`;
+    }
+    
+    function loadOutputHistory() {
+        fetch('/api/output-history')
+            .then(response => response.json())
+            .then(data => {
+                updateHistoryTable(data);
+            })
+            .catch(error => {
+                console.error('Error loading output history:', error);
+                showAlert('Erro ao carregar histórico de saídas.', 'danger');
+            });
+    }
+    
+    function updateHistoryTable(data) {
+        const tableBody = document.getElementById('history-table-body');
+        tableBody.innerHTML = '';
+        
+        data.forEach(item => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${item.data_saida}</td>
+                <td>${item.nome_produto}</td>
+                <td>${item.quantidade_retirada}</td>
+                <td>${item.retirante}</td>
+            `;
+            tableBody.appendChild(row);
+        });
+    }
+    
+    function loadRecipients() {
+        fetch('/api/recipients')
+            .then(response => response.json())
+            .then(data => {
+                const selectElement = document.getElementById('output-recipient');
+                selectElement.innerHTML = '';
+                
+                data.forEach(recipient => {
+                    const option = document.createElement('option');
+                    option.value = recipient;
+                    option.textContent = recipient;
+                    selectElement.appendChild(option);
+                });
+            })
+            .catch(error => {
+                console.error('Error loading recipients:', error);
+            });
+    }
+    
+    function setupEventListeners() {
+        // Filter type change
+        document.getElementById('filter-type').addEventListener('change', function() {
+            loadInventory(this.value);
+        });
+        
+        // Search input
+        document.getElementById('search-input').addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase();
+            const filteredInventory = inventory.filter(product => 
+                product.some(value => String(value).toLowerCase().includes(searchTerm))
+            );
+            updateInventoryTable(filteredInventory);
+        });
+        
+        // Add product form
+        document.getElementById('add-product-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            addProduct();
+        });
+        
+        // Clear form button
+        document.getElementById('clear-form').addEventListener('click', function() {
+            document.getElementById('add-product-form').reset();
+        });
+        
+        // Edit product button (delegated)
+        document.addEventListener('click', function(e) {
+            if (e.target.closest('.btn-edit')) {
+                const productId = e.target.closest('.btn-edit').dataset.productId;
+                openEditModal(productId);
+            }
+        });
+        
+        // Save edit button
+        document.getElementById('save-edit').addEventListener('click', function() {
+            saveProductEdit();
+        });
+        
+        // Add quantity button (delegated)
+        document.addEventListener('click', function(e) {
+            if (e.target.closest('.btn-add-quantity')) {
+                const btn = e.target.closest('.btn-add-quantity');
+                openAddQuantityModal(btn.dataset.productId, btn.dataset.productName);
+            }
+        });
+        
+        // Save add quantity
+        document.getElementById('save-add-quantity').addEventListener('click', function() {
+            saveAddQuantity();
+        });
+        
+        // Register output button (delegated)
+        document.addEventListener('click', function(e) {
+            if (e.target.closest('.btn-register-output')) {
+                const btn = e.target.closest('.btn-register-output');
+                openRegisterOutputModal(btn.dataset.productId, btn.dataset.productName);
+            }
+        });
+        
+        // Save output
+        document.getElementById('save-output').addEventListener('click', function() {
+            saveOutput();
+        });
+        
+        // Delete button (delegated)
+        document.addEventListener('click', function(e) {
+            if (e.target.closest('.btn-delete')) {
+                const btn = e.target.closest('.btn-delete');
+                openDeleteModal(btn.dataset.productId, btn.dataset.productName);
+            }
+        });
+        
+        // Confirm delete
+        document.getElementById('confirm-delete').addEventListener('click', function() {
+            deleteProduct();
+        });
+        
+        // Export CSV
+        document.getElementById('export-csv').addEventListener('click', function() {
+            exportToCsv();
+        });
+    }
+    
+    function addProduct() {
+        const form = document.getElementById('add-product-form');
+        const formData = new FormData(form);
+        const productData = {};
+        
+        for (const [key, value] of formData.entries()) {
+            productData[key] = value;
+        }
+        
+        fetch('/api/inventory/add', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(productData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showAlert(data.message, 'success');
+                form.reset();
+                loadInventory();
+            } else {
+                showAlert(data.message, 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error adding product:', error);
+            showAlert('Erro ao adicionar produto.', 'danger');
+        });
+    }
+    
+    function openEditModal(productId) {
+        const product = inventory.find(p => p[0] === productId);
+        if (!product) return;
+        
+        document.getElementById('edit-product-id').value = product[0];
+        document.getElementById('edit-product-type').value = product[1];
+        document.getElementById('edit-product-name').value = product[2];
+        document.getElementById('edit-product-size').value = product[3];
+        document.getElementById('edit-product-ca').value = product[4];
+        document.getElementById('edit-product-expiration').value = product[5];
+        document.getElementById('edit-product-brand').value = product[6];
+        document.getElementById('edit-product-quantity').value = product[7];
+        
+        const modal = new bootstrap.Modal(document.getElementById('edit-product-modal'));
+        modal.show();
+    }
+    
+    function saveProductEdit() {
+        const productData = {
+            id: document.getElementById('edit-product-id').value,
+            type: document.getElementById('edit-product-type').value,
+            name: document.getElementById('edit-product-name').value,
+            size: document.getElementById('edit-product-size').value,
+            ca: document.getElementById('edit-product-ca').value,
+            expiration: document.getElementById('edit-product-expiration').value,
+            brand: document.getElementById('edit-product-brand').value,
+            quantity: document.getElementById('edit-product-quantity').value
+        };
+        
+        fetch('/api/inventory/edit', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(productData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showAlert(data.message, 'success');
+                bootstrap.Modal.getInstance(document.getElementById('edit-product-modal')).hide();
+                loadInventory();
+            } else {
+                showAlert(data.message, 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error editing product:', error);
+            showAlert('Erro ao editar produto.', 'danger');
+        });
+    }
+    
+    function openAddQuantityModal(productId, productName) {
+        document.getElementById('add-quantity-product-id').value = productId;
+        document.getElementById('add-quantity-product-name').value = productName;
+        document.getElementById('add-quantity-value').value = 1;
+        
+        const modal = new bootstrap.Modal(document.getElementById('add-quantity-modal'));
+        modal.show();
+    }
+    
+    function saveAddQuantity() {
+        const quantityData = {
+            id: document.getElementById('add-quantity-product-id').value,
+            quantity: document.getElementById('add-quantity-value').value
+        };
+        
+        fetch('/api/inventory/add-quantity', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(quantityData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showAlert(data.message, 'success');
+                bootstrap.Modal.getInstance(document.getElementById('add-quantity-modal')).hide();
+                loadInventory();
+            } else {
+                showAlert(data.message, 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error adding quantity:', error);
+            showAlert('Erro ao adicionar quantidade.', 'danger');
+        });
+    }
+    
+    function openRegisterOutputModal(productId, productName) {
+        document.getElementById('output-product-id').value = productId;
+        document.getElementById('output-product-name').value = productName;
+        document.getElementById('output-quantity').value = 1;
+        
+        const modal = new bootstrap.Modal(document.getElementById('register-output-modal'));
+        modal.show();
+    }
+    
+    function saveOutput() {
+        const outputData = {
+            id: document.getElementById('output-product-id').value,
+            recipient: document.getElementById('output-recipient').value,
+            quantity: document.getElementById('output-quantity').value
+        };
+        
+        fetch('/api/inventory/register-output', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(outputData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showAlert(data.message, 'success');
+                bootstrap.Modal.getInstance(document.getElementById('register-output-modal')).hide();
+                loadInventory();
+                loadOutputHistory();
+            } else {
+                showAlert(data.message, 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error registering output:', error);
+            showAlert('Erro ao registrar saída.', 'danger');
+        });
+    }
+    
+    function openDeleteModal(productId, productName) {
+        document.getElementById('delete-product-id').value = productId;
+        document.getElementById('delete-product-name').textContent = productName;
+        
+        const modal = new bootstrap.Modal(document.getElementById('delete-modal'));
+        modal.show();
+    }
+    
+    function deleteProduct() {
+        const productId = document.getElementById('delete-product-id').value;
+        
+        fetch('/api/inventory/delete', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ id: productId })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showAlert(data.message, 'success');
+                bootstrap.Modal.getInstance(document.getElementById('delete-modal')).hide();
+                loadInventory();
+            } else {
+                showAlert(data.message, 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error deleting product:', error);
+            showAlert('Erro ao excluir produto.', 'danger');
+        });
+    }
+    
+    function exportToCsv() {
+        fetch('/api/inventory/export')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Create blob and download
+                    const blob = new Blob([data.data], { type: 'text/csv;charset=utf-8;' });
+                    const link = document.createElement('a');
+                    link.href = URL.createObjectURL(blob);
+                    link.download = data.filename;
+                    link.style.display = 'none';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    
+                    showAlert(data.message, 'success');
+                } else {
+                    showAlert(data.message, 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Error exporting CSV:', error);
+                showAlert('Erro ao exportar dados.', 'danger');
+            });
+    }
+    
+    function showAlert(message, type) {
+        const alertHTML = `
+            <div class="alert alert-${type} alert-dismissible fade show">
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `;
+        
+        const alertContainer = document.createElement('div');
+        alertContainer.innerHTML = alertHTML;
+        document.querySelector('.main-content').prepend(alertContainer.firstChild);
+        
+        // Auto dismiss after 5 seconds
+        setTimeout(() => {
+            const alerts = document.querySelectorAll('.alert');
+            alerts.forEach(alert => {
+                const bsAlert = bootstrap.Alert.getOrCreateInstance(alert);
+                bsAlert.close();
+            });
+        }, 5000);
+    }
+</script>
+{% endblock %}

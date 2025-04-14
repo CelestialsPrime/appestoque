@@ -1,0 +1,360 @@
+# app.py
+from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+import firebase_admin
+from firebase_admin import credentials, db
+import os
+import uuid
+from datetime import datetime
+import csv
+import json
+import io
+
+app = Flask(__name__)
+app.secret_key = 'estoque_sistema_secreto'
+
+# Firebase initialization
+if not firebase_admin._apps:
+    cred = credentials.Certificate('estoque-988b9-firebase-adminsdk-fbsvc-6571d072e0.json')
+    firebase_admin.initialize_app(cred, {
+        'databaseURL': 'https://estoque-988b9-default-rtdb.firebaseio.com/'
+    })
+
+# Login Manager setup
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+
+# Simple User Class for Authentication
+class User(UserMixin):
+    def __init__(self, id, username):
+        self.id = id
+        self.username = username
+
+# Mock user database (in production, use Firebase Authentication)
+users = {
+    'admin': {'password': 'admin123', 'id': '1', 'username': 'Administrador'},
+    'usuario': {'password': 'user123', 'id': '2', 'username': 'Usuário Padrão'}
+}
+
+@login_manager.user_loader
+def load_user(user_id):
+    for username, user_data in users.items():
+        if user_data['id'] == user_id:
+            return User(user_id, user_data['username'])
+    return None
+
+# Helper Functions
+def load_inventory():
+    ref = db.reference("estoque")
+    inventory = ref.get()
+    return inventory if inventory else []
+
+def save_inventory(inventory):
+    ref = db.reference("estoque")
+    ref.set(inventory)
+
+def get_unique_types():
+    inventory = load_inventory()
+    unique_types = sorted(set(product[1] for product in inventory))
+    return unique_types
+
+# Routes
+@app.route('/')
+def index():
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+    return redirect(url_for('login'))
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        if username in users and users[username]['password'] == password:
+            user = User(users[username]['id'], users[username]['username'])
+            login_user(user)
+            return redirect(url_for('dashboard'))
+        else:
+            flash('Credenciais inválidas. Por favor, tente novamente.', 'danger')
+    
+    return render_template('login.html')
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('login'))
+
+@app.route('/dashboard')
+@login_required
+def dashboard():
+    inventory = load_inventory()
+    unique_types = get_unique_types()
+    
+    # Check expired products
+    current_date = datetime.today().date()
+    for product in inventory:
+        try:
+            expiration_date = datetime.strptime(product[5], "%d/%m/%Y").date()
+            product.append("expired" if expiration_date < current_date else "")
+        except ValueError:
+            product.append("")
+    
+    return render_template('dashboard.html', 
+                           inventory=inventory, 
+                           unique_types=unique_types,
+                           username=current_user.username)
+
+@app.route('/api/inventory', methods=['GET'])
+@login_required
+def get_inventory():
+    filter_type = request.args.get('type', 'Todos')
+    inventory = load_inventory()
+    
+    if filter_type != 'Todos':
+        inventory = [product for product in inventory if product[1].lower() == filter_type.lower()]
+    
+    # Check expired products
+    current_date = datetime.today().date()
+    for product in inventory:
+        try:
+            expiration_date = datetime.strptime(product[5], "%d/%m/%Y").date()
+            product.append("expired" if expiration_date < current_date else "")
+        except ValueError:
+            product.append("")
+    
+    return jsonify(inventory)
+
+@app.route('/api/inventory/add', methods=['POST'])
+@login_required
+def add_product():
+    try:
+        data = request.json
+        inventory = load_inventory()
+        
+        # Validate data
+        if not all(data.get(field) for field in ['type', 'name', 'size', 'ca', 'expiration', 'brand', 'quantity']):
+            return jsonify({'success': False, 'message': 'Todos os campos são obrigatórios!'})
+        
+        # Validate numeric fields
+        try:
+            int(data.get('ca'))
+            int(data.get('quantity'))
+        except ValueError:
+            return jsonify({'success': False, 'message': 'CA e Quantidade devem ser números inteiros!'})
+        
+        # Validate date format
+        try:
+            datetime.strptime(data.get('expiration'), "%d/%m/%Y")
+        except ValueError:
+            return jsonify({'success': False, 'message': 'A data de validade deve estar no formato DD/MM/AAAA!'})
+        
+        # Create product data
+        product_id = str(uuid.uuid4())[:8]
+        product_data = [
+            product_id,
+            data.get('type'),
+            data.get('name'),
+            data.get('size'),
+            data.get('ca'),
+            data.get('expiration'),
+            data.get('brand'),
+            data.get('quantity')
+        ]
+        
+        # Add to inventory
+        inventory.append(product_data)
+        save_inventory(inventory)
+        
+        return jsonify({'success': True, 'message': 'Produto adicionado com sucesso!'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Erro: {str(e)}'})
+
+@app.route('/api/inventory/edit', methods=['POST'])
+@login_required
+def edit_product():
+    try:
+        data = request.json
+        inventory = load_inventory()
+        
+        product_id = data.get('id')
+        if not product_id:
+            return jsonify({'success': False, 'message': 'ID do produto não fornecido!'})
+        
+        # Find and update product
+        for product in inventory:
+            if product[0] == product_id:
+                product[1] = data.get('type')
+                product[2] = data.get('name')
+                product[3] = data.get('size')
+                product[4] = data.get('ca')
+                product[5] = data.get('expiration')
+                product[6] = data.get('brand')
+                product[7] = data.get('quantity')
+                break
+        else:
+            return jsonify({'success': False, 'message': 'Produto não encontrado!'})
+        
+        save_inventory(inventory)
+        return jsonify({'success': True, 'message': 'Produto atualizado com sucesso!'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Erro: {str(e)}'})
+
+@app.route('/api/inventory/delete', methods=['POST'])
+@login_required
+def delete_product():
+    try:
+        data = request.json
+        product_id = data.get('id')
+        
+        if not product_id:
+            return jsonify({'success': False, 'message': 'ID do produto não fornecido!'})
+        
+        inventory = load_inventory()
+        updated_inventory = [product for product in inventory if product[0] != product_id]
+        
+        if len(inventory) == len(updated_inventory):
+            return jsonify({'success': False, 'message': 'Produto não encontrado!'})
+        
+        save_inventory(updated_inventory)
+        return jsonify({'success': True, 'message': 'Produto removido com sucesso!'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Erro: {str(e)}'})
+
+@app.route('/api/inventory/add-quantity', methods=['POST'])
+@login_required
+def add_quantity():
+    try:
+        data = request.json
+        product_id = data.get('id')
+        quantity_to_add = int(data.get('quantity', 0))
+        
+        if not product_id or quantity_to_add <= 0:
+            return jsonify({'success': False, 'message': 'Dados inválidos!'})
+        
+        inventory = load_inventory()
+        for product in inventory:
+            if product[0] == product_id:
+                product[7] = str(int(product[7]) + quantity_to_add)
+                break
+        else:
+            return jsonify({'success': False, 'message': 'Produto não encontrado!'})
+        
+        save_inventory(inventory)
+        return jsonify({'success': True, 'message': f'Adicionado {quantity_to_add} unidades ao produto!'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Erro: {str(e)}'})
+
+@app.route('/api/inventory/register-output', methods=['POST'])
+@login_required
+def register_output():
+    try:
+        data = request.json
+        product_id = data.get('id')
+        recipient = data.get('recipient')
+        quantity = int(data.get('quantity', 0))
+        
+        if not product_id or not recipient or quantity <= 0:
+            return jsonify({'success': False, 'message': 'Dados inválidos!'})
+        
+        inventory = load_inventory()
+        product_name = None
+        for product in inventory:
+            if product[0] == product_id:
+                current_quantity = int(product[7])
+                if quantity > current_quantity:
+                    return jsonify({'success': False, 'message': 'Quantidade retirada maior que a disponível no estoque!'})
+                
+                product[7] = str(current_quantity - quantity)
+                product_name = product[2]
+                break
+        else:
+            return jsonify({'success': False, 'message': 'Produto não encontrado!'})
+        
+        # Register output in history
+        output_date = datetime.today().strftime("%d/%m/%Y")
+        output_history = {
+            "produto_id": product_id,
+            "nome_produto": product_name,
+            "quantidade_retirada": quantity,
+            "retirante": recipient,
+            "data_saida": output_date
+        }
+        
+        ref_output = db.reference("historico_saidas")
+        ref_output.push(output_history)
+        
+        save_inventory(inventory)
+        return jsonify({'success': True, 'message': f'Saída de {quantity} unidades registrada para {recipient}!'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Erro: {str(e)}'})
+
+@app.route('/api/inventory/export', methods=['GET'])
+@login_required
+def export_csv():
+    try:
+        inventory = load_inventory()
+        
+        if not inventory:
+            return jsonify({'success': False, 'message': 'Não há itens no estoque para exportar!'})
+        
+        # Create CSV in memory
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Headers
+        headers = ["ID", "Tipo de Produto", "Nome", "Tamanho", "CA", "Validade", "Marca", "Quantidade"]
+        writer.writerow(headers)
+        writer.writerows(inventory)
+        
+        # Create response
+        csv_data = output.getvalue()
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        return jsonify({
+            'success': True, 
+            'message': 'Arquivo CSV gerado com sucesso!',
+            'filename': f'estoque_{timestamp}.csv',
+            'data': csv_data
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Erro ao exportar: {str(e)}'})
+
+@app.route('/api/recipients', methods=['GET'])
+@login_required
+def get_recipients():
+    recipients = [
+        "Afonso", "Aline", "Amanda", "Amilton", "Carlos", "Diego", "Egesiel", 
+        "Felipe", "Fernanda", "Fernando", "Francis", "Gabriel", "Glauber", 
+        "Glaucia", "Janderson", "Jean", "Jorge", "Joseane", "Juliana", 
+        "Leandro", "Luis F", "Margarete", "Maria", "Matheus", "Mirela", 
+        "Patrícia", "Raquel", "Renan", "Rogério", "Taylan", "Thelma", 
+        "Vitória", "José Eduardo", "Evandro", "Decarlo", "Danilo", "Oledir", 
+        "Ester", "Bruno", "Marco Aurélio", "Ângela", "Diogo", "Sara", "Vitor", "Externo"
+    ]
+    return jsonify(sorted(recipients))
+
+@app.route('/api/output-history', methods=['GET'])
+@login_required
+def get_output_history():
+    ref_output = db.reference("historico_saidas")
+    history = ref_output.get()
+    
+    if not history:
+        return jsonify([])
+    
+    # Convert dict to list
+    history_list = []
+    for key, value in history.items():
+        value["id"] = key
+        history_list.append(value)
+    
+    # Sort by date (newest first)
+    history_list.sort(key=lambda x: datetime.strptime(x['data_saida'], "%d/%m/%Y"), reverse=True)
+    
+    return jsonify(history_list)
+
+if __name__ == '__main__':
+    app.run(debug=True, use_reloader=False)
